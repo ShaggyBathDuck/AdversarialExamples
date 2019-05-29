@@ -45,7 +45,9 @@ class TestWindow(QMainWindow):
         super().__init__(parent)
         self.set_bg_color()
         self.setCursor(Qt.BlankCursor)
-        
+        self.current_image = None
+        self.already_chosen = False
+        self.choices = []
         self.thread = QThread()
         self.slide_show_worker = SlideShowWorker(images)
         self.slide_show_worker.moveToThread(self.thread)
@@ -55,13 +57,16 @@ class TestWindow(QMainWindow):
         self.slide_show_worker.image.connect(self.show_image)
         self.slide_show_worker.mask.connect(self.show_mask)
         self.slide_show_worker.dark_screen.connect(self.show_dark_screen)
-        self.slide_show_worker.end.connect(self.close)
+        self.slide_show_worker.end.connect(self.end_test)
         self.thread.start()
 
     def show_fixation(self):
+        self.current_image = None
+        self.already_chosen = False
         self.setCentralWidget(FixationView(self))
 
     def show_image(self, image):
+        self.current_image = image
         self.setCentralWidget(ImageView(self, image))
 
     def show_mask(self):
@@ -70,10 +75,34 @@ class TestWindow(QMainWindow):
     def show_dark_screen(self):
         self.setCentralWidget(None)
 
+    def end_test(self):
+        print('Choices:')
+        for choice in self.choices:
+            print(choice)
+        self.close()
+
     def set_bg_color(self):
         palette = self.palette()
         palette.setColor(self.backgroundRole(), Qt.black)
         self.setPalette(palette)
+
+    def keyPressEvent(self, event):
+        if self.current_image is not None:
+            if self.already_chosen is False:
+                if event.key() == Qt.Key_Left:
+                    self.already_chosen = True
+                    self.choices.append((self.current_image, 1))
+                    print('class 1 chosen')
+                elif event.key() == Qt.Key_Right:
+                    self.already_chosen = True
+                    self.choices.append((self.current_image, 2))
+                    print('class 2 chosen')
+                else:
+                    print('Wrong button!')
+            else:
+                print('Already chosen class for that image!')
+        else:
+            print('Pressed in wrong moment!')
 
 
 class SlideShowWorker(QObject):
