@@ -32,6 +32,7 @@ class Tester:
         directories = [d for d in listdir(
             images_path) if isdir(join(images_path, d))]
         self.classes = [d for d in directories if not d.endswith('_adv')]
+        random.shuffle(self.classes)
         if len(self.classes) != 2:
             raise RuntimeError(
                 'There should be exactly 2 directories named after image classes, found: {0}'.format(self.classes))
@@ -215,8 +216,9 @@ class SlideShowWorker(QObject):
             time.sleep(1)
             self.image.emit()
             time.sleep(0.063)
-            self.mask.emit()
-            time.sleep(0.02)
+            for j in range(10):
+                self.mask.emit()
+                time.sleep(0.02)
             self.dark_screen.emit()
             time.sleep(2.5)
         self.end.emit()
