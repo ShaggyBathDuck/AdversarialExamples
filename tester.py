@@ -17,6 +17,13 @@ IMAGES_PATH = './tester_images'
 # how many images from given directory will be used in test
 IMAGES_COUNTS = [(5, 5), (5, 5)]
 
+# display times configuration
+FIXATION_DISPLAY_TIME_S = 1
+IMAGE_DISPLAY_TIME_S = 0.063
+DISPLAYED_MASKS_COUNT = 10
+MASK_DISPLAY_TIME_S = 0.02
+DARK_SCREEN_DISPLAY_TIME_S = 2.5
+
 CM_PER_INCH = 2.54
 
 
@@ -232,14 +239,14 @@ class SlideShowWorker(QObject):
         time.sleep(5)
         for i in range(self.image_count):
             self.fixation.emit()
-            time.sleep(1)
+            time.sleep(FIXATION_DISPLAY_TIME_S)
             self.image.emit()
-            time.sleep(0.063)
-            for j in range(10):
+            time.sleep(IMAGE_DISPLAY_TIME_S)
+            for j in range(DISPLAYED_MASKS_COUNT):
                 self.mask.emit()
-                time.sleep(0.02)
+                time.sleep(MASK_DISPLAY_TIME_S)
             self.dark_screen.emit()
-            time.sleep(2.5)
+            time.sleep(DARK_SCREEN_DISPLAY_TIME_S)
         self.end.emit()
 
 
