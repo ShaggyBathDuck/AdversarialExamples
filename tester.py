@@ -7,11 +7,17 @@ from numpy import random
 from PIL import Image
 import time
 
+# side length of displayed images
 PIC_SIDE_CM = 15.24
-CM_PER_INCH = 2.54
+# your screen ppi, configure this so the picture size will match your expectations
 PIXELS_PER_INCH = 109
+# path to directory with 4 subdirectories - 2 directories with original images
+#  and 2 directories (optional, suffixed '_adv') with adversarial images, eg. dog, cat, dog_adv, cat_adv
 IMAGES_PATH = './tester_images'
-IMAGES_COUNTS = [(2, 1), (2, 1)]
+# how many images from given directory will be used in test
+IMAGES_COUNTS = [(5, 5), (5, 5)]
+
+CM_PER_INCH = 2.54
 
 
 class Image:
@@ -23,7 +29,6 @@ class Image:
 
     def is_guessed_correctly(self):
         return self.guessed_cls == self.cls
-
 
 class Tester:
     def __init__(self, images_path, images_counts):
@@ -46,22 +51,21 @@ class Tester:
         original_dir = join(self._images_path, label)
         original_images = self._list_image_files(original_dir)
         self._print_image_count(len(original_images), label)
+        chosen_original_images = random.choice(
+            a=original_images, size=min(images_count[0], len(original_images)), replace=False)
+        for img in chosen_original_images:
+            self._chosen_images.append(
+                Image(join(original_dir, img), cls, True))
 
         adv_dir = join(self._images_path, label + '_adv')
-        if not isdir(adv_dir):
-            raise RuntimeError(
-                'Missing adversarial images directory for class {0}'.format(label))
-        adv_images = self._list_image_files(adv_dir)
-        self._print_image_count(len(adv_images), label + ' adversarial')
-
-        chosen_original_images = random.choice(
-            a=original_images, size=images_count[0], replace=False)
-        for img in chosen_original_images:
-            self._chosen_images.append(Image(join(original_dir, img), cls, True))
-        chosen_adv_images = random.choice(
-            a=adv_images, size=images_count[1], replace=False)
-        for img in chosen_adv_images:
-            self._chosen_images.append(Image(join(adv_dir, img), cls, False))
+        if isdir(adv_dir):
+            adv_images = self._list_image_files(adv_dir)
+            self._print_image_count(len(adv_images), label + ' adversarial')
+            chosen_adv_images = random.choice(
+                a=adv_images, size=min(images_count[1], len(adv_images)), replace=False)
+            for img in chosen_adv_images:
+                self._chosen_images.append(
+                    Image(join(adv_dir, img), cls, False))
 
     def _list_image_files(self, dir):
         return [f for f in listdir(dir) if isfile(join(dir, f)) and (f.endswith('.jpg') or f.endswith('.jpeg'))]
@@ -81,11 +85,16 @@ class Tester:
         if image.guessed_cls is None:
             image.guessed_cls = cls
 
+    def reset(self):
+        self._last_guessed_index = -1
+        for img in self._chosen_images:
+            img.guessed_cls = None
+
     def print_accurracy(self):
         general_acc = len([img for img in self._chosen_images if img.is_guessed_correctly(
         )]) / len(self._chosen_images)
-        print('General accurracy is {}'.format(general_acc))
-        for cls,label in enumerate(self.classes):
+        print('\nGeneral accurracy is {}'.format(general_acc))
+        for cls, label in enumerate(self.classes):
             original_class_images = [
                 img for img in self._chosen_images if img.cls == cls and img.original]
             original_class_acc = len(
@@ -98,6 +107,17 @@ class Tester:
                 adv_acc = len(
                     [img for img in adv_images if img.is_guessed_correctly()]) / len(adv_images)
                 print('Adversarial {} accurracy is {}'.format(label, adv_acc))
+        unclassified_count = len(
+            [img for img in self._chosen_images if img.guessed_cls is None])
+        print('Unclassified: {}'.format(unclassified_count))
+
+    def print_choices(self):
+        print('\nChoices:')
+        for img in self._chosen_images:
+            filename = img.file
+            label = self.classes[img.guessed_cls] if img.guessed_cls is not None else '-'
+            print('{}, {}'.format(filename, label))
+
 
 
 class Window(QMainWindow):
@@ -111,10 +131,12 @@ class Window(QMainWindow):
 class ControlView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.tester = Tester(IMAGES_PATH, IMAGES_COUNTS)        
+        self.tester = Tester(IMAGES_PATH, IMAGES_COUNTS)
         grid = QGridLayout(self)
-        first_class_help_label = QLabel('Left arrow <- {}'.format(self.tester.classes[0]))
-        second_class_help_label = QLabel('Right arrow -> {}'.format(self.tester.classes[1]))
+        first_class_help_label = QLabel(
+            'Left arrow <- {}'.format(self.tester.classes[0]))
+        second_class_help_label = QLabel(
+            'Right arrow -> {}'.format(self.tester.classes[1]))
         start_button = QPushButton('Start test')
         start_button.clicked.connect(self.on_start_button_clicked)
         grid.addWidget(first_class_help_label, 0, 0)
@@ -135,7 +157,6 @@ class TestWindow(QMainWindow):
         self.setCursor(Qt.BlankCursor)
         self.current_image = None
         self.already_chosen = False
-        self.choices = []
         self.thread = QThread()
         self.slide_show_worker = SlideShowWorker(self.tester.images_count)
         self.slide_show_worker.moveToThread(self.thread)
@@ -166,9 +187,8 @@ class TestWindow(QMainWindow):
 
     def end_test(self):
         self.tester.print_accurracy()
-        print('Choices:')
-        for choice in self.choices:
-            print(choice)
+        self.tester.print_choices()
+        self.tester.reset()
         self.close()
 
     def set_bg_color(self):
@@ -178,7 +198,6 @@ class TestWindow(QMainWindow):
 
     def on_image_guessed(self, cls):
         self.already_chosen = True
-        self.choices.append((self.current_image, cls))
         self.tester.guess(cls)
 
     def keyPressEvent(self, event):
